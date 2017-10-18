@@ -1,0 +1,23 @@
+README
+
+To start the server:
+go build ribbet_server.go
+./ribbet_server
+
+Create an account
+http://www.localhost.com:8080/create
+
+Login
+http://www.localhost.com:8080/login
+
+Logout
+http://www.localhost.com:8080/logout
+
+Add or remove friends
+http://www.localhost.com:8080/manage
+
+Delete your account
+http://www.localhost.com:8080/delete
+
+To post messages and see your feed
+http://www.localhost.com:8080/main

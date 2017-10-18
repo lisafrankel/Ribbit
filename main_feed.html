@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+
+<html>
+
+	<head>
+		<title> Ribbit </title>
+	</head>
+
+	<body>
+		<h1> Welcome Back </h1>
+		<h2> Here's what your friends are up to </h3>
+		<form action = "/main" method="post">
+			Write a post:
+			<input type ="text" name="post"> <br>
+			<input type="submit" value="Post"> <!-- might need an action -->
+		</form>
+		<p> {{range .}} <div> <b> User: {{.Username}} Time ID: {{.Time_id}}</b> {{.Post_data}} </div> {{end}} </p>
+		<h3> <a href="/manage"> Manage Friends </a> </h3>
+		<h3> <a href="/logout"> Log out </a> </h3> 
+		<h3> <a href="/delete"> Delete account </a> </h3> 
+
+	</body>
+
+</html>
