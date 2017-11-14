@@ -1,8 +1,18 @@
+// Project Pt. 2
+// LHF238 / N18380086
+
 README
 
+The backend server script is called ribbit_server.go and the front end server is called client.go
+
+To run the backend server, you must first install gouuid:
+go get github.com/nu7hatch/gouuid
+
+Make sure the Users directory which is included in the submission is in the same directory as the two server scripts
+
 To start the server:
-go build ribbet_server.go
-./ribbet_server
+go run ribbit_server.go
+go run client.go
 
 Create an account
 http://www.localhost.com:8080/create
@@ -21,3 +31,36 @@ http://www.localhost.com:8080/delete
 
 To post messages and see your feed
 http://www.localhost.com:8080/main
+
+
+Updates:
+
+UI: Remains the same
+
+Files: All user data is now stored in files within the directory Users (which is included in this submission)
+A directory is maintained for each user, which contains user data .txt files for name, password, and email, as well as a friends directory, which contains a .txt file for each friend the user has, and posts directory for each post the user writes.
+
+Messaging between frontend and backend:
+
+post_croak func
+frontend post_croak sends an HTTP post request via http.PostForm("http://localhost:8081/main" ... ) to send backend a user's post data, and the response from the backend will have an error code 512 if the post is greaer than 100 characters. frontend post_croak calls http.PostForm("http://localhost:8081/getUserFeed ... ) to get the users feed from the backend.
+
+login func
+frontend login sends an HTTP post request via http.PostForm("http://localhost:8081/login ... ) sending the backend the user's password and email, and the backend responds with error code 601 if the user does not exist, and 602 if the password is incorrect.
+
+manageFriends func
+frontend manageFriends sends an HTTP post request via http.PostForm("http://localhost:8081/manage ... ) sending the backend the user's username, the friend, and if they want to add or remove the friend.  The backend adds or removes the friend to the user's friend directory, so long as as the friend exists.
+
+deleteAccount func
+frontend deleteAccount sends an HTTP post request via http.PostForm("http://localhost:8081/delete ... ) sending the backend the username to be deleted, and the backend completes this action.
+
+makeAccount func
+frontend makeAccount sends an HTTP post request via http.PostForm("http://localhost:8081/create" ... ) sending the backend the user's data.  The backend responds with error code 607 if the username already exists, and 606 if the user submitted an empty string for one of the form values.  If there are no errors, the backend adds the user account.
+
+Resp error codes:
+512		Err: Post exceeds 100 characters
+601		User Does Not Exist
+602		Incorrect Password
+606		Invalid Form Entry
+607		Username Already Exists
+608		Can't add friend that is already friend
