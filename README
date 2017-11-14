@@ -1,6 +1,3 @@
-// Project Pt. 2
-// LHF238 / N18380086
-
 README
 
 The backend server script is called ribbit_server.go and the front end server is called client.go
@@ -33,11 +30,7 @@ To post messages and see your feed
 http://www.localhost.com:8080/main
 
 
-Updates:
-
-UI: Remains the same
-
-Files: All user data is now stored in files within the directory Users (which is included in this submission)
+Data storage: All user data is stored in files within a directory Users
 A directory is maintained for each user, which contains user data .txt files for name, password, and email, as well as a friends directory, which contains a .txt file for each friend the user has, and posts directory for each post the user writes.
 
 Messaging between frontend and backend:
