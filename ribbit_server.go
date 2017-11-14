@@ -1,7 +1,3 @@
-// Project Pt. 2
-// LHF238 / N18380086
-// Backend
-
 package main
 
 import (
