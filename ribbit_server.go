@@ -32,12 +32,6 @@ type post struct {
 	Time_id int
 }
 
-// global data, Users is a map of Users & their data, Posts is a map of posts & associate data, time_track used a happened-before time_id for posts
-var Users = make(map[string]user)
-var Posts []post
-var time_track int = 0
-
-
 // function to create user directory, with personal data file, and friends directory
 func createUserFile(username string, name string, password string, email string) {
 	os.Mkdir("Users/" + username, 0777)
@@ -334,8 +328,6 @@ func makeAccount(w http.ResponseWriter, r *http.Request) {
 			} else {
 				createUserFile(username, name, password, email)
 				
-				// delete line when done implimenting DB
-				Users[username] = new_user
 			}
 		}
 	}
