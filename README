@@ -36,24 +36,48 @@ A directory is maintained for each user, which contains user data .txt files for
 Messaging between frontend and backend:
 
 post_croak func
-frontend post_croak sends an HTTP post request via http.PostForm("http://localhost:8081/main" ... ) to send backend a user's post data, and the response from the backend will have an error code 512 if the post is greaer than 100 characters. frontend post_croak calls http.PostForm("http://localhost:8081/getUserFeed ... ) to get the users feed from the backend.
+front end sends message string over tcp as: "post", post, username (where post is the post content) to localhost:8081.  If the post is greater than 100 characters, the server will send code 512, and otherwise will send code 200.
 
 login func
-frontend login sends an HTTP post request via http.PostForm("http://localhost:8081/login ... ) sending the backend the user's password and email, and the backend responds with error code 601 if the user does not exist, and 602 if the password is incorrect.
+front end sends message string over tcp as "login", username, password to localhost:8081.  Server sends back code 601 if user does not exists, and 602 is password is incorrect.  Otherwise, server will send code 200.
 
 manageFriends func
-frontend manageFriends sends an HTTP post request via http.PostForm("http://localhost:8081/manage ... ) sending the backend the user's username, the friend, and if they want to add or remove the friend.  The backend adds or removes the friend to the user's friend directory, so long as as the friend exists.
+front end sends message string over tcp as "manage", friend, choice to localhost:8081.  Choice will be either add, or remove (what to do with friend).  If the friend does not exist, the server will send code 601, otherwise, the server will send code 200.
 
 deleteAccount func
-frontend deleteAccount sends an HTTP post request via http.PostForm("http://localhost:8081/delete ... ) sending the backend the username to be deleted, and the backend completes this action.
+front end sends message string over tcp as "delete", username choice to localhost:8081.
 
 makeAccount func
-frontend makeAccount sends an HTTP post request via http.PostForm("http://localhost:8081/create" ... ) sending the backend the user's data.  The backend responds with error code 607 if the username already exists, and 606 if the user submitted an empty string for one of the form values.  If there are no errors, the backend adds the user account.
+front end sends message string over tcp as "create", username, name, email, password to localhost:8081.  Servver sends back code 607 if the username already exists, and 606 if the user submitted an empty string for one of the form values.  If there are no errors, the backend just sends code 200
 
 Resp error codes:
+200		OK
 512		Err: Post exceeds 100 characters
 601		User Does Not Exist
 602		Incorrect Password
 606		Invalid Form Entry
 607		Username Already Exists
 608		Can't add friend that is already friend
+
+WHERE MULTUPLE GO ROUTINES MAY TRY TO ACCESS DATA
+There is a global map of RWMutexes, where file/directory name strings are the key.
+
+R1: reason for read lock on user directories: Any goroutine that wants to read or write data within a user's directory must have a read lock on the directory. This ensures that when trying to delete a user's directory, there won't be any threads reading/writing files within the directory.
+
+func deleteUserFile - while one thread is deleting the user's data, there are other go routines that may be trying to access data within the directory.  Because of this, to delete a user the function first locks the directory.  Unlocks the directory after deleting the user files.
+
+func addFriendForUser - gets a read lock on the user's directory, because of R1.  RUnlock directory after checking if friend file exists
+
+func removeFriendForUser - gets a read lock on user's directory, becayse of R1.  Also gets a write lock on the friend's file within the users directory so that no other threads can trying to access this file while it's being deleted.  Unlock file after deleting the file, and RUnlock the directory.
+
+func UserExists - gets a read lock on user's directory, becayse of R1. RUnlock the directory after seeing if the user direcory exists.
+
+func passwordCorrect - gets a read lock on user's directory, becayse of R1. RUnlock the directory after seeing if the user's password is correct.  Also get a read lock on the user's password text file, and unlock this after reading the file.  Otherwise, a user could try to login on two browsers at the same time, and there would be a data race
+
+func addPostFile - gets a read lock on user's directory, becayse of R1. RUnlock the directory after adding the post file into the directory.  After creating the post file, get a write lock on the file, and unlock after writing the content to the file.  Otherwise, a different process may try to read from that file while it's being written.
+
+func areFriends - gets a read lock on user's directory, becayse of R1. RUnlock the directory after checking if users are friends.
+
+func createUserFeed - gets a read lock on user's directory, becayse of R1. RUnlock the directory at then end of the function.  Also iteravivley get read locks on the users/friend_name directory from where posts are being read from (because of R1), as well as the actual file being read (as other threads may try to access this file while it's being read).  RUnlock iteraively when done reading the files, and when done w/ the friends directory
+
+func deleteUser - gets a read lock on the user directory that is friends with the person being deleted , becayse of R1. RUnlock the directory after deleting the person being deleted's file.
