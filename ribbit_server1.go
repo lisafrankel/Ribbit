@@ -1,3 +1,7 @@
+// Author: Lisa Frankel
+// Backend server 1
+
+
 package main
 
 import (
@@ -13,7 +17,12 @@ import (
 	"sync"
 )
 
-var filelocks = make(map[string]*sync.RWMutex)
+
+var c = struct  {
+	sync.RWMutex
+	filelocks map[string]*sync.RWMutex
+} {filelocks: make(map[string]*sync.RWMutex)}
+	 
 
 
 // struct for a post object, where post data is stored
@@ -23,40 +32,54 @@ type post struct {
 	Time_id   int
 }
 
-func getLock(filename string) {
-	if _, ok := filelocks[filename]; ok {
-		filelocks[filename].Lock()
-		fmt.Println("locking: ", filename, "in getLock")
-	} else {
-		filelocks[filename] = &sync.RWMutex{}
-		fmt.Println("new lock, locking: ", filename, "in getLock")
-		filelocks[filename].Lock()
+func check(err error) {
+	if err != nil {
+		fmt.Println(err)
 	}
 }
 
-func getReadLock(filename string) {
-	if _, ok := filelocks[filename]; ok {
-		fmt.Println("locking: ", filename, "in getReadLock")
-		filelocks[filename].RLock()
+func getLock(filename string) {
+	c.Lock()
+	if _, ok := c.filelocks[filename]; ok {
+		c.filelocks[filename].Lock()
+		fmt.Println("locking: ", filename, "in getLock")
 	} else {
-		filelocks[filename] = &sync.RWMutex{}
-		fmt.Println("new lock, locking: ", filename, "in getReadLock")
-		filelocks[filename].RLock()
+		c.filelocks[filename] = &sync.RWMutex{}
+		fmt.Println("new lock, locking: ", filename, "in getLock")
+		c.filelocks[filename].Lock()
 	}
+	c.Unlock()
+}
+
+
+
+func getReadLock(filename string) {
+	c.Lock()
+	if _, ok := c.filelocks[filename]; ok {
+		fmt.Println("locking: ", filename, "in getReadLock")
+		c.filelocks[filename].RLock()
+	} else {
+		c.filelocks[filename] = &sync.RWMutex{}
+		fmt.Println("new lock, locking: ", filename, "in getReadLock")
+		c.filelocks[filename].RLock()
+	}
+	c.Unlock()
 }
 
 
 // function to create user directory, with personal data file, and friends directory
 func createUserFile(username string, name string, password string, email string) {
-	os.Mkdir("Users/"+username, 0777)
-	os.Mkdir("Users/"+username+"/friends", 0777)
-	os.Mkdir("Users/"+username+"/posts", 0777)
+	os.Mkdir("Users1/"+username, 0777)
+	os.Mkdir("Users1/"+username+"/friends", 0777)
+	os.Mkdir("Users1/"+username+"/posts", 0777)
 
-	filelocks["Users/"+username] = &sync.RWMutex{}
-	fmt.Println("creating lock: ", "Users/", username, "in create user file")
+	c.Lock()
+	c.filelocks["Users1/"+username] = &sync.RWMutex{}
+	c.Unlock()
+	fmt.Println("creating lock: ", "Users1/", username, "in create user file")
 
 	// make user friends with self
-	self_file, self_err := os.Create("Users/" + username + "/friends/" + username + ".txt")
+	self_file, self_err := os.Create("Users1/" + username + "/friends/" + username + ".txt")
 	defer self_file.Close()
 
 	if self_err != nil {
@@ -64,7 +87,7 @@ func createUserFile(username string, name string, password string, email string)
 	}
 
 	// make file with name
-	name_file, name_err := os.Create("Users/" + username + "/name.txt")
+	name_file, name_err := os.Create("Users1/" + username + "/name.txt")
 	defer name_file.Close()
 	if name_err != nil {
 		log.Fatal(name_err)
@@ -73,7 +96,7 @@ func createUserFile(username string, name string, password string, email string)
 	name_file.WriteString(name)
 
 	// make file with password
-	password_file, password_err := os.Create("Users/" + username + "/password.txt")
+	password_file, password_err := os.Create("Users1/" + username + "/password.txt")
 	defer password_file.Close()
 	if password_err != nil {
 		log.Fatal(password_err)
@@ -82,7 +105,7 @@ func createUserFile(username string, name string, password string, email string)
 	password_file.WriteString(password)
 
 	// make file with email
-	email_file, email_err := os.Create("Users/" + username + "/email.txt")
+	email_file, email_err := os.Create("Users1/" + username + "/email.txt")
 	defer email_file.Close()
 	if email_err != nil {
 		log.Fatal(email_err)
@@ -94,69 +117,82 @@ func createUserFile(username string, name string, password string, email string)
 
 // function to delete user file
 func deleteUserFile(username string) {
-	getLock("Users/" + username)
-	err := os.RemoveAll("Users/" + username)
-	if err != nil {
-		log.Fatal(err)
-	}
-	filelocks["Users/" + username].Unlock()
-	fmt.Println("unlocked", "Users/" + username, "in delete user file")
+	getLock("Users1/" + username)
+	err := os.RemoveAll("Users1/" + username)
+	check(err)
+	c.Lock()
+	c.filelocks["Users1/" + username].Unlock()
+	c.Unlock()
+	fmt.Println("unlocked", "Users1/" + username, "in delete user file")
 }
 
 // function adds a file with friend's name into user's friend directory
 func addFriendForUser(username string, friend string) {
-	getReadLock("Users/" + username)
-	file, err := os.Create("Users/" + username + "/friends/" + friend + ".txt")
+	getReadLock("Users1/" + username)
+	getLock("Users1/" + username + "/friends/" + friend + ".txt")
+	file, err := os.Create("Users1/" + username + "/friends/" + friend + ".txt")
+	c.Lock()
+	c.filelocks["Users1/" + username + "/friends/" + friend + ".txt"].Unlock()
+	c.Unlock()
 	defer file.Close()
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 }
 
 // function removes a file with friend's name from user's friend directory
 func removeFriendForUser(username string, friend string) {
-	filename := "Users/" + username + "/friends/" + friend + ".txt"
+	filename := "Users1/" + username + "/friends/" + friend + ".txt"
 	getLock(filename)
-	getReadLock("Users/" + username)
+	getReadLock("Users1/" + username)
 	err := os.Remove(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	filelocks[filename].Unlock()
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	check(err)
+	c.Lock()
+	c.filelocks[filename].Unlock()
+	c.Unlock()
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 	fmt.Println("unlocked", filename, "in removeFriendForUser")
 }
 
 func userExists(username string) bool {
-	getReadLock("Users/" + username)
-	if _, err := os.Stat("Users/" + username); os.IsNotExist(err) {
+	getReadLock("Users1/" + username)
+	if _, err := os.Stat("Users1/" + username); os.IsNotExist(err) {
+		c.Lock()
+		c.filelocks["Users1/" + username].RUnlock()
+		c.Unlock()
 		return false
 	}
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 	return true
 }
 
 // checks to see if password correct for the username
 func passwordCorrect(username string, password string) bool {
-	filename := "Users/" + username + "/password.txt"
-	getReadLock("Users/" + username)
+	filename := "Users1/" + username + "/password.txt"
+	getReadLock("Users1/" + username)
 	file, err := os.Open(filename)
 	defer file.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 
 	getReadLock(filename)
 	realPassword, _ := ioutil.ReadFile(filename)
-	filelocks[filename].RUnlock()
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	c.Lock()
+	c.filelocks[filename].RUnlock()
+	c.Unlock()
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 	fmt.Println("unlocked", filename, "in passwordCorrect")
 	if string(realPassword) == password {
 		return true
@@ -167,57 +203,64 @@ func passwordCorrect(username string, password string) bool {
 //add post to user's file
 func addPostFile(username string, post string) {
 	my_uuid, _ := uuid.NewV4()
-	filename := "Users/" + username + "/posts/" + my_uuid.String() + ".txt"
-	getReadLock("Users/" + username)
+	filename := "Users1/" + username + "/posts/" + my_uuid.String() + ".txt"
+	getReadLock("Users1/" + username)
 	file, err := os.Create(filename)
 	defer file.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 
 	getLock(filename)
 	file.WriteString(post)
 	
-	filelocks[filename].Unlock()
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	c.Lock()
+	c.filelocks[filename].Unlock()
+	c.Unlock()
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 	fmt.Println("unlocked", filename, "in addPostFile")
 
 }
 
-// func to check if users are friends
+// func to check if users1 are friends
 func areFriends(username string, friend string) bool {
-	getReadLock("Users/" + username)
-	if _, err := os.Stat("Users/" + username + "/friends/" + friend + ".txt"); os.IsNotExist(err) {
-		return false
+	retval := true
+	getReadLock("Users1/" + username)
+	if _, err := os.Stat("Users1/" + username + "/friends/" + friend + ".txt"); os.IsNotExist(err) {
+		retval = false
 	}
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
-	return true
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
+	return retval
 }
 
 
-// function for selecting posts for users based on their friends list
+// function for selecting posts for users1 based on their friends list
 func createUserFeed(username string) []post {
 	var user_feed []post
-	getReadLock("Users/" + username)
-	friends, _ := filepath.Glob("Users/" + username + "/friends/*")
+	getReadLock("Users1/" + username)
+	friends, _ := filepath.Glob("Users1/" + username + "/friends/*")
 	fmt.Println("friend list", friends)
 	for _, friend := range friends {
-		friend_name := friend[len("Users/"+username+"/friends/") : len(friend)-4]
+		friend_name := friend[len("Users1/"+username+"/friends/") : len(friend)-4]
 		fmt.Println("friends name", friend_name)
-		getReadLock("Users/"+friend_name)
-		friend_posts, _ := filepath.Glob("Users/" + friend_name + "/posts/*")
+		getReadLock("Users1/"+friend_name)
+		friend_posts, _ := filepath.Glob("Users1/" + friend_name + "/posts/*")
 		fmt.Println("friends posts", friend_posts)
 		for _, fpost := range friend_posts {
 			fmt.Println("file name", fpost)
 
 			// for mac OS, have to add this if statement to prevent opening .DS_Store file
-			if fpost != "Users/"+friend_name+"/posts/.DS_Store" {
+			if fpost != "Users1/"+friend_name+"/posts/.DS_Store" {
 				getReadLock(fpost)
 				new_post_string, _ := ioutil.ReadFile(fpost)
-				filelocks[fpost].RUnlock()
+				c.Lock()
+				c.filelocks[fpost].RUnlock()
+				c.Unlock()
 				fmt.Println("unlocked", fpost, "in createUserFeed")
 				fmt.Println("new string", new_post_string)
 				var new_post post
@@ -227,10 +270,14 @@ func createUserFeed(username string) []post {
 				user_feed = append(user_feed, new_post)
 			}
 		}
-		filelocks["Users/"+friend_name].RUnlock()
+		c.Lock()
+		c.filelocks["Users1/"+friend_name].RUnlock()
+		c.Unlock()
 	}
-	filelocks["Users/" + username].RUnlock()
-	fmt.Println("read unlocking Users/", username)
+	c.Lock()
+	c.filelocks["Users1/" + username].RUnlock()
+	c.Unlock()
+	fmt.Println("read unlocking Users1/", username)
 	return user_feed
 }
 
@@ -278,31 +325,47 @@ func manageFriends(username string, friend string, choice string) string {
 // handler for deleting a user from the site
 func deleteUser(username string) {
 
-	// delete user from Users "database"
+	// delete user from Users3 "database"
 	deleteUserFile(username)
 
 	// delete user from other user's friend lists
-	users, _ := filepath.Glob("Users/*")
-	for _, user := range users {
+	getReadLock("Users1/")
+	users1, _ := filepath.Glob("Users1/*")
+	c.Lock()
+	c.filelocks["Users1/"].RUnlock()
+	c.Unlock()
+	for _, user := range users1 {
 		// for mac OS, have to add this if statement to prevent opening .DS_Store file
-		if user != "Users/.DS_Store/friends/"+username+".txt" {
+		if user != "Users1/.DS_Store/friends/"+username+".txt" {
+			getReadLock(user + "/friends/" + username + ".txt")
 			if _, err := os.Stat(user + "/friends/" + username + ".txt"); os.IsNotExist(err) {
+				c.Lock()
+				c.filelocks[user + "/friends/" + username + ".txt"].RUnlock()
+				c.Unlock()
 				break
 			} else {
-				getReadLock("Users/"+user)
+				c.Lock()
+				c.filelocks[user + "/friends/" + username + ".txt"].RUnlock()
+				c.Unlock()
+				getReadLock("Users1/"+user)
 				filename := user + "/friends/" + username + ".txt"
 				getLock(filename)
 				e := os.RemoveAll(filename)
 				if e != nil {
 					log.Fatal(e)
 				}
-				filelocks[filename].Unlock()
-				filelocks["Users/"+user].RUnlock()
+				c.Lock()
+				c.filelocks[filename].Unlock()
+				c.Unlock()
+				c.Lock()
+				c.filelocks["Users1/"+user].RUnlock()
+				c.Unlock()
 				fmt.Println("unlocked", filename, "in deleteUser")
 			}
 		}
 	}
 }
+
 
 // handler for deleting user account
 func deleteAccount(username string) {
@@ -331,13 +394,21 @@ func clientConns(listener net.Listener) chan net.Conn {
 	go func () {
 		for {
 			client, err := listener.Accept()
-			if err != nil {
-				fmt.Println(err)
-			}
+			check(err)
 			clientJobs <- client
 		}
 	} ()
 	return clientJobs
+}
+
+func tellBalancerClientLeft() {
+	server_msg := "server1"
+		
+	conn, _ := net.Dial("tcp", "localhost:8084")
+	defer conn.Close()
+
+	fmt.Fprintf(conn, server_msg)
+
 }
 
 func handleConn(client net.Conn) {
@@ -346,9 +417,7 @@ func handleConn(client net.Conn) {
 	// read message from client
 	message := make([]byte, 1024)
 	n, err := client.Read(message)
-	if err != nil {
-		fmt.Println(err)
-	}
+	check(err)
 
 	// format message into tokens
 	s_message := string(message[:n])
@@ -358,29 +427,34 @@ func handleConn(client net.Conn) {
 		fmt.Println("create request")
 		statusCode := makeAccount(message_tokens[1], message_tokens[2], message_tokens[3], message_tokens[4])
 		fmt.Fprintf(client, statusCode)
+		tellBalancerClientLeft()
 		return
 	}
 	if message_tokens[0] == "delete" {
 		fmt.Println("delete request")
 		deleteAccount(message_tokens[1])
+		tellBalancerClientLeft()
 		return
 	}
 	if message_tokens[0] == "manage" {
 		fmt.Println("manage request")
 		statusCode := manageFriends(message_tokens[1], message_tokens[2], message_tokens[3])
 		fmt.Fprintf(client, statusCode)
+		tellBalancerClientLeft()
 		return
 	}
 	if message_tokens[0] == "login" {
 		fmt.Println("login request")
 		statusCode := login(message_tokens[1], message_tokens[2])
 		fmt.Fprintf(client, statusCode)
+		tellBalancerClientLeft()
 		return
 	}
 	if message_tokens[0] == "post" {
 		fmt.Println("post request")
 		statusCode := post_croak(message_tokens[1], message_tokens[2])
 		fmt.Fprintf(client, statusCode)
+		tellBalancerClientLeft()
 		return
 	}
 	if message_tokens[0] == "getUserFeed" {
@@ -388,6 +462,7 @@ func handleConn(client net.Conn) {
 		jsonFeed := getUserFeed(message_tokens[1])
 		// fmt.Fprintf(client, "jsonFeed")
 		client.Write(jsonFeed)
+		tellBalancerClientLeft()
 		return
 	}
 	
@@ -395,13 +470,11 @@ func handleConn(client net.Conn) {
 
 func main() {
 	// create Users directory where users are stored
-	if _, err := os.Stat("Users/"); os.IsNotExist(err) {
-		os.Mkdir("Users/", 0777)
+	if _, err := os.Stat("Users1/"); os.IsNotExist(err) {
+		os.Mkdir("Users1/", 0777)
 	}
 	ln, err := net.Listen("tcp", ":8081")
-	if err != nil {
-		fmt.Println(err)
-	}
+	check(err)
 	conns := clientConns(ln)
 	for {
 		go handleConn(<-conns)
