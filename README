@@ -1,15 +1,20 @@
 README
 
-The backend server script is called ribbit_server.go and the front end server is called client.go
+*details about replication servers at the bottom of the readme
 
 To run the backend server, you must first install gouuid:
 go get github.com/nu7hatch/gouuid
 
-Make sure the Users directory which is included in the submission is in the same directory as the two server scripts
+To compile the code run this line:
+go run client.go; go run balancer.go; go run ribbit_server1.go; go run ribbit_server2.go; go run ribbit_server3.go
 
-To start the server:
-go run ribbit_server.go
-go run client.go
+To run the application:
+./client
+./balancer
+./ribbit_server1
+./ribbit_server2
+./ribbit_server3
+
 
 Create an account
 http://www.localhost.com:8080/create
@@ -81,3 +86,50 @@ func areFriends - gets a read lock on user's directory, becayse of R1. RUnlock t
 func createUserFeed - gets a read lock on user's directory, becayse of R1. RUnlock the directory at then end of the function.  Also iteravivley get read locks on the users/friend_name directory from where posts are being read from (because of R1), as well as the actual file being read (as other threads may try to access this file while it's being read).  RUnlock iteraively when done reading the files, and when done w/ the friends directory
 
 func deleteUser - gets a read lock on the user directory that is friends with the person being deleted , becayse of R1. RUnlock the directory after deleting the person being deleted's file.
+
+
+*REPLICATION*
+
+ARCHITECTURE
+This application has 3 backend servers which all maintain their own database file systems.  There is a single client, and there is also a load balancer which interfaces with the backend servers and client, acting as master.
+
+READING FROM & WRITING TO DATABASES
+To perform a function that requires a read, the client server asks the balancer for a backend server to send its read request to.
+
+To perform a function that requires a write, the client server asks the balancer for ALL running backend servers to send it all up servers to send the write request to.
+
+COMMUNICATION BETWEEN CLIENT & BALANCER
+getReadServer() - client asks the balancer which server to send read request, balancer returns a port # or nil if all servers are down
+getWriteServer() - cleint asks the balancer for all running servers to send write request, balancer returns a []string of port#s or "nil"s if servers down
+tellBalancer() - client writes to balancer message "down," + port, meaning the server listening at this port is down.
+
+COMMUNICATION BETWEEN BACKEND SERVERS & BALANCER
+tellBalancerClientLeft() - tells the balancer a client left, sending the message "serverN", where N = the number of that server
+
+
+LOAD BALANCING
+The load balancer tracks the number of clients that are reading from each backend server, and how many clients leave each backend server.  It sends the clients to read from the backend servers with the least number of clients connected.  It does not track how many clients are writing with backend servers, as a client will always write with all running backend servers.
+
+HANDLING SERVER CRASHES
+The load balancer is constatnly checking the status of backend servers (if they are running or not) with the checkUpServers() and checkDownServers() functions.
+
+If the client tries to connect a server that is down, it tells the balancer and then asks for a different server.
+
+If a server goes down, the backend server realizes this either from asking the backend servers if they are up with the checkUpServers() function, or because a client tried to connect to one and was unable to.  If a server comes back up, the balancer will notice because of the checkDownServers() function.  
+
+If all servers are down, then when the client tries to get a server from the balancer to talk to, it will be told there are none.  On the browser page a error message will appear saying that there are no running servers.
+
+RECOVERY
+I have implemented a solution for recovery, which is not perfect.  Here are the rules
+1. After a server goes down (crashes or is manually stopped), it can come back online.
+2. If a server that has gone down comes back up, the balancer will know this, but it will not let a client read or write to it. 
+3. A server's status will only be set back to true (i.e. up and running) after all servers status' are false (i.e. down). (This is because before setting a servers status to true, it must update the database.  For consistency and thread safety, the database can not be updated while clients are connecting to other servers.)
+4. A server's status could be false even though it is running.  This means it has crashed, and although it is running, its database has not been updated.
+5. Once all the server's status are false, the databases will be updated.
+6. On updating databases, the most recent database's data (which is measured by which server was the last to go down) will be copied into the other two server's databases.
+7. Once the data has been restored, the balancer will check to make sure ALL servers are running (not their status, which will always be false at this point in time, but if they are actually running).
+8. After restoring data, and once all backend servers running, the balancer will allow the client to connect to the servers again. 
+
+SUMMARY
+Two servers can crash, and clients will still be able to connect.  No server's can come back and have clients connect to them until their data is restored.  Data can not be restored until all servers's state is down, and at least one comes back up (state is false, but server is running).  Clients will be able to connect again once all servers are back up and running (status is true).
+
