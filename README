@@ -1,6 +1,6 @@
 README
 
-This project was built for a parallel and distruvuted systems course assignemtn at NYU.  It is a replicated and multithreaded web application written in Go.  This readme explains how to run the code, how the servers communicate with eachother, how the data for the application is stored, how replication is implimented, data recovery from server crashes, as well as how data races are handled.
+This project was built for a parallel and distributed systems course assignment at NYU.  It is a replicated and multithreaded web application written in Go.  This readme explains how to run the code, how the servers communicate with each other, how the data for the application is stored, how replication is implemented, data recovery from server crashes, as well as how data races are handled.
 
 To run the backend server, you must first install gouuid:
 go get github.com/nu7hatch/gouuid
